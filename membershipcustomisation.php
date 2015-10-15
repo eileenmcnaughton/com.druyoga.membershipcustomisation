@@ -211,16 +211,67 @@ function membershipcustomisation_civicrm_buildForm($formName, &$form) {
 function membershipcustomisation_civicrm_validateForm($formName, &$fields, &$files, &$form, &$errors) {
   if ($formName == 'CRM_Contribute_Form_Contribution_Main') {
     foreach ($form->_submitValues as $key => $value) {
-      if (substr($key, 0, 6) == 'price_' && in_array(substr($key, 7), membershipcustomisation_get_supported_price_fields())) {
+      if (substr($key, 0, 6) == 'price_' && in_array(substr($key, 6), membershipcustomisation_get_supported_price_fields())) {
         $data = &$form->controller->container();
         if (in_array($value, membershipcustomisation_get_renew_price_fields_values())) {
-          $detail = membershipcustomisation_get_price_fields_value_spec(substr($key, 7),$value);
-          $data['values']['Main']['is_recur'] = 1;
-          $data['values']['Main']['frequency_interval'] = $detail['frequency_interval'];
-          $data['values']['Main']['installments'] = $detail['installments'];
+          $data['values']['Main']['auto_renew'] = 1;
+
         }
         elseif (in_array($value, membershipcustomisation_get_no_renew_price_fields_values())) {
-          $data['values']['Main']['is_recur'] = 0;
+          $data['values']['Main']['auto_renew'] = 0;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_civicrm_validateForm().
+ *
+ * We are overriding form values to set recur based on price field options.
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_preProcess
+ *
+ * @param string $formName
+ * @param CRM_Contribute_Form_Contribution_Main $form
+ */
+function membershipcustomisation_civicrm_preProcess($formName, &$form) {
+  if ($formName == 'CRM_Contribute_Form_Contribution_Confirm') {
+    foreach ($form->_params as $key => $value) {
+      if (substr($key, 0, 6) == 'price_' && in_array(substr($key, 6), membershipcustomisation_get_supported_price_fields())) {
+        if (in_array($value, membershipcustomisation_get_renew_price_fields_values())) {
+          $form->_values['is_recur'] = 1;
+          $detail = membershipcustomisation_get_price_fields_value_spec(substr($key, 6),$value);
+          $form->_params['frequency_interval'] = $detail['frequency_interval'];
+          $form->_params['installments'] = $detail['installments'];
+        }
+        elseif (in_array($value, membershipcustomisation_get_no_renew_price_fields_values())) {
+          $form->_values['is_recur'] = 0;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_civicrm_validateForm().
+ *
+ * We are overriding form values to set recur based on price field options.
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_postProcess
+ *
+ * @param string $formName
+ * @param CRM_Contribute_Form_Contribution_Main $form
+ */
+function membershipcustomisation_civicrm_postProcess($formName, &$form) {
+  if ($formName == 'CRM_Contribute_Form_Contribution_Main') {
+    foreach ($form->_submitValues as $key => $value) {
+      if (substr($key, 0, 6) == 'price_' && in_array(substr($key, 6), membershipcustomisation_get_supported_price_fields())) {
+        if (in_array($value, membershipcustomisation_get_renew_price_fields_values())) {
+          $form->_values['is_recur'] = 1;
+        }
+        elseif (in_array($value, membershipcustomisation_get_no_renew_price_fields_values())) {
+          $form->_values['is_recur'] = 0;
         }
       }
     }
@@ -256,9 +307,11 @@ function membershipcustomisation_get_price_fields_value_spec($priceFieldID, $pri
 function membershipcustomisation_get_renew_price_fields_values() {
   $supportedConfig = membershipcustomisation_civicrm_get_configured_items();
   $priceOptions = array();
-  foreach ($supportedConfig as $priceOptionID => $priceOption) {
-    if ($priceOption['is_renew']) {
-      $priceOptions[] = $priceOptionID;
+  foreach ($supportedConfig as $priceField) {
+    foreach ($priceField as $priceFieldValueID => $priceOption) {
+      if ($priceOption['is_renew']) {
+        $priceOptions[] = $priceFieldValueID;
+      }
     }
   }
   return $priceOptions;
